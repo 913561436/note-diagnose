@@ -257,7 +257,6 @@
         e.preventDefault();
         clearError();
         resultSection.classList.add("hidden");
-        setLoading(true);
 
         const formData = new FormData(form);
         const payload = {
@@ -265,6 +264,13 @@
           content: String(formData.get("content") || "").trim(),
           tags: String(formData.get("tags") || "").trim(),
         };
+
+        if (payload.content.length < 30) {
+          setError("内容太少，建议至少输入50字以上才能获得准确诊断");
+          return;
+        }
+
+        setLoading(true);
 
         try {
           const resp = await fetch("/api/diagnose", {
