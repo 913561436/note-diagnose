@@ -1,4 +1,4 @@
-const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
+const ZHIPU_CHAT_MODEL = "glm-4-flash";
 const ZHIPU_EMBEDDING_MODEL = "embedding-3";
 
 const CATEGORY_LIBRARY = {
@@ -30927,7 +30927,7 @@ function findNearestCategoryAndTopPosts(userEmbedding) {
   return categoryScores[0];
 }
 
-async function runClaudeDiagnosis(userNote, nearestCategory, similarPosts) {
+async function runDiagnosisWithZhipuChat(userNote, nearestCategory, similarPosts) {
   const systemPrompt =
     "你是内容诊断专家。请根据用户笔记和同类参考爆款内容进行结构化诊断。必须只输出 JSON，不要输出任何解释文字或 Markdown。";
 
@@ -30958,28 +30958,29 @@ async function runClaudeDiagnosis(userNote, nearestCategory, similarPosts) {
     },
   };
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${process.env.ZHIPU_API_KEY}`,
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
+      model: ZHIPU_CHAT_MODEL,
       max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: JSON.stringify(userPrompt) }],
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: JSON.stringify(userPrompt) },
+      ],
     }),
   });
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Anthropic request failed: ${detail}`);
+    throw new Error(`Zhipu chat request failed: ${detail}`);
   }
 
   const data = await response.json();
-  const rawText = data?.content?.find((item) => item.type === "text")?.text || "";
+  const rawText = data?.choices?.[0]?.message?.content || "";
   const jsonText = stripMarkdownCodeFence(rawText);
   return JSON.parse(jsonText);
 }
@@ -31021,8 +31022,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY || !process.env.ZHIPU_API_KEY) {
-    return res.status(500).json({ error: "Missing ANTHROPIC_API_KEY or ZHIPU_API_KEY" });
+  if (!process.env.ZHIPU_API_KEY) {
+    return res.status(500).json({ error: "Missing ZHIPU_API_KEY" });
   }
 
   try {
@@ -31052,7 +31053,7 @@ export default async function handler(req, res) {
       throw new Error("Failed to find nearest category");
     }
 
-    const diagnosis = await runClaudeDiagnosis({ title, content, tags }, nearest.category, nearest.top3);
+    const diagnosis = await runDiagnosisWithZhipuChat({ title, content, tags }, nearest.category, nearest.top3);
     const result = normalizeDiagnosisResult(diagnosis);
     return res.status(200).json(result);
   } catch (error) {
