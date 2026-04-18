@@ -30860,6 +30860,11 @@ function cosineSimilarity(vecA, vecB) {
   }
   const size = Math.min(vecA.length, vecB.length);
   if (size === 0) return -1;
+  if (vecA.length !== vecB.length) {
+    console.warn(
+      `[cosineSimilarity] Embedding length mismatch, truncating to ${size}. user=${vecA.length}, corpus=${vecB.length}`
+    );
+  }
 
   let dot = 0;
   let normA = 0;
@@ -31031,6 +31036,16 @@ export default async function handler(req, res) {
     if (!Array.isArray(userEmbedding)) {
       throw new Error("Invalid embedding vector from Zhipu");
     }
+    console.log(`[diagnose] User embedding length: ${userEmbedding.length}`);
+
+    const firstCategory = Object.keys(CATEGORY_LIBRARY)[0];
+    const firstPost = firstCategory ? CATEGORY_LIBRARY[firstCategory]?.[0] : null;
+    const firstCorpusEmbedding = firstPost?.embedding;
+    const firstCorpusEmbeddingLength = Array.isArray(firstCorpusEmbedding) ? firstCorpusEmbedding.length : 0;
+    console.log(`[diagnose] First corpus embedding length: ${firstCorpusEmbeddingLength}`);
+    if (!Array.isArray(firstCorpusEmbedding)) {
+      throw new Error("Corpus first note embedding is missing or invalid.");
+    }
 
     const nearest = findNearestCategoryAndTopPosts(userEmbedding);
     if (!nearest) {
@@ -31041,9 +31056,10 @@ export default async function handler(req, res) {
     const result = normalizeDiagnosisResult(diagnosis);
     return res.status(200).json(result);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({
-      error: "Diagnosis failed",
-      detail: error.message,
+      error: message,
+      detail: message,
     });
   }
 }
