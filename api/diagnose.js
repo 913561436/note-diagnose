@@ -30886,6 +30886,23 @@ function stripMarkdownCodeFence(text) {
   return trimmed;
 }
 
+function extractJsonCandidate(rawText) {
+  const text = (rawText || "").trim();
+  if (!text) return "";
+
+  const fencedMatch = text.match(/```json\s*([\s\S]*?)\s*```/i) || text.match(/```\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const objectMatch = text.match(/\{[\s\S]*\}/);
+  if (objectMatch?.[0]) {
+    return objectMatch[0].trim();
+  }
+
+  return text;
+}
+
 async function getZhipuEmbedding(inputText) {
   const response = await fetch("https://open.bigmodel.cn/api/paas/v4/embeddings", {
     method: "POST",
@@ -30981,8 +30998,18 @@ async function runDiagnosisWithZhipuChat(userNote, nearestCategory, similarPosts
 
   const data = await response.json();
   const rawText = data?.choices?.[0]?.message?.content || "";
-  const jsonText = stripMarkdownCodeFence(rawText);
-  return JSON.parse(jsonText);
+  console.log("[runDiagnosisWithZhipuChat] Raw GLM response:", rawText);
+
+  const jsonText = extractJsonCandidate(stripMarkdownCodeFence(rawText));
+  try {
+    return JSON.parse(jsonText);
+  } catch (parseError) {
+    throw new Error(
+      `Failed to parse GLM JSON response: ${
+        parseError instanceof Error ? parseError.message : String(parseError)
+      } | raw_text: ${rawText}`
+    );
+  }
 }
 
 function normalizeDiagnosisResult(result) {
